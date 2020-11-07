@@ -55,7 +55,11 @@ loop(Expected) ->
 
 initRouters(Graph, Routers, ETable) ->
     lists:foreach(fun({NodeName, Edges}) -> 
-        [{_, N}] =  ets:lookup(ETable, NodeName),
+        case ets:first(ETable) of
+            '$end_of_table' -> doNothing;
+            _ ->
+            [{_, N}] =  ets:lookup(ETable, NodeName)
+        end,
         [{_, Pid}] = ets:lookup(Routers, NodeName),
         RT = initRoutingTable(Edges, Routers, []),
         Pid ! {control, self(), self(), 0,
