@@ -37,7 +37,7 @@
         the root process will broadcast {doCommit, self(), SeqNum} to all the other nodes, 
         if the replys are {abort, From, SeqNum} then broadcast {doAbort, self(), SeqNum}
     ->
-    If root node committed, all the nodes will choose to return current routering table or the copy one 
+    If root node committed, all the nodes will choose to return current routering table or the copy one by the 2pc message root node sent 
 
 2. Provide an exact description of any extra messages you've introduced
     1. Phase1 - reply of control message
