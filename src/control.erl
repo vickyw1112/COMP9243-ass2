@@ -115,9 +115,9 @@ extendNetwork(RootPid, SeqNum, From, {NodeName, Edges}) ->
                             case self() of
                                 In ->  
                                     [{_, N}] = ets:lookup(Table, '$NoInEdges'),
-                                    ets:insert(Table, {'$NoInEdges', N+1})
+                                    ets:insert(Table, {'$NoInEdges', N+1});
+                                _ ->doNothing
                                 end
-                        
                         end, Edges),
                     [] % no processed spawned
             end

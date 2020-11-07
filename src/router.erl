@@ -19,7 +19,8 @@ loop(RouterName, Rtable, Seqtable) ->
                     Next = ets:lookup(Rtable, Dest),
                     case Next of
                         [{_, Nid}] -> 
-                            Nid ! {message, Dest, self(), Pid, NewTrace}
+                            Nid ! {message, Dest, self(), Pid, NewTrace};
+                        _ -> doNothing
                     end
             end,
             loop(RouterName, Rtable, Seqtable);
@@ -56,78 +57,83 @@ clearMailbox() ->
         end.
 
 handleControl(RouterName, Rtable, Seqtable, From, Pid, SeqNum, ControlFun) ->
-    NewSeq = [SeqNum|Seqtable],
-    Dump = lists:flatten(ets:match(Rtable, '$1')),
-    TempTable = ets:new(undef, [private]),
-    ets:insert(TempTable, Dump),
-    case Pid of
-        % this is root node 
-        From -> 
-            broadcast(Rtable, {control, self(), Pid, SeqNum, ControlFun}),
-            Res = handleControlFun(RouterName, TempTable, ControlFun),
-            Replys = coordinate1(Rtable, SeqNum, NewSeq),
-            case Res of
-                abort ->
-                    % here broadcast phase1 result to everyone
-                    broadcast(Rtable, {doAbort, self(), SeqNum}),
-                    Pid ! {abort, self(), SeqNum},
-                    ets:delete(TempTable),
-                    Rtable;
-                Children when Replys == abort ->
-                    broadcast(Rtable, {doAbort, self(), SeqNum}),
-                    lists:foreach(fun(C) -> 
-                            exit(C, abort)
-                        end, Children),
-                    Pid ! {abort, self(), SeqNum},
-                    ets:delete(TempTable),
-                    Rtable;
-                Children when Replys == yes ->
-                    broadcast(Rtable, {doCommit, self(), SeqNum}),
-                    Pid ! {committed, self(), SeqNum},
-                    ets:delete(Rtable),
-                    TempTable
-            end;
-        % normal nodes
-        _Else ->
-            broadcast(Rtable, {control, self(), Pid, SeqNum, ControlFun}),
-            case handleControlFun(RouterName, TempTable, ControlFun) of
-                abort ->
-                    % phase1
-                    coordinate1(Rtable, SeqNum, NewSeq),
-                    From ! {abort, self(), SeqNum},
-                    % phase2 
-                    % Replys is not important here
-                    coordinate2(SeqNum),
-                    broadcast(Rtable, {doAbort, self(), SeqNum}),
-                    ets:delete(TempTable),
-                    Rtable;
-                Children ->
-                    Reply1 = coordinate1(Rtable, SeqNum, NewSeq),
-                    case Reply1 of
-                        abort -> From ! {abort, self(), SeqNum};
-                        yes -> From ! {yes, self(), SeqNum}
-                    end,
-                    Reply2 = coordinate2(SeqNum),
-                    broadcast(Rtable, {Reply2, self(), SeqNum}),
-                    case Reply2 of
-                        doAbort ->
+    Doesfind = lists:member(SeqNum, Seqtable),
+    case Doesfind of
+        true -> Rtable;
+        _ ->
+            NewSeq = [SeqNum|Seqtable],
+            Dump = lists:flatten(ets:match(Rtable, '$1')),
+            TempTable = ets:new(undef, [private]),
+            ets:insert(TempTable, Dump),
+            case Pid of
+                % this is root node 
+                From -> 
+                    broadcast(Rtable, {control, self(), Pid, SeqNum, ControlFun}),
+                    Res = handleControlFun(RouterName, TempTable, ControlFun),
+                    Replys = coordinate1(Rtable, SeqNum, NewSeq),
+                    case Res of
+                        abort ->
+                            % here broadcast phase1 result to everyone
+                            broadcast(Rtable, {doAbort, self(), SeqNum}),
+                            Pid ! {abort, self(), SeqNum},
                             ets:delete(TempTable),
+                            Rtable;
+                        Children when Replys == abort ->
+                            broadcast(Rtable, {doAbort, self(), SeqNum}),
                             lists:foreach(fun(C) -> 
                                     exit(C, abort)
                                 end, Children),
+                            Pid ! {abort, self(), SeqNum},
+                            ets:delete(TempTable),
                             Rtable;
-                        doCommit ->
+                        Children when Replys == yes ->
+                            broadcast(Rtable, {doCommit, self(), SeqNum}),
+                            Pid ! {committed, self(), SeqNum},
                             ets:delete(Rtable),
                             TempTable
+                    end;
+                % normal nodes
+                _Else ->
+                    broadcast(Rtable, {control, self(), Pid, SeqNum, ControlFun}),
+                    case handleControlFun(RouterName, TempTable, ControlFun) of
+                        abort ->
+                            % phase1
+                            coordinate1(Rtable, SeqNum, NewSeq),
+                            From ! {abort, self(), SeqNum},
+                            % phase2 
+                            % Replys is not important here
+                            coordinate2(SeqNum),
+                            broadcast(Rtable, {doAbort, self(), SeqNum}),
+                            ets:delete(TempTable),
+                            Rtable;
+                        Children ->
+                            Reply1 = coordinate1(Rtable, SeqNum, NewSeq),
+                            case Reply1 of
+                                abort -> From ! {abort, self(), SeqNum};
+                                yes -> From ! {yes, self(), SeqNum}
+                            end,
+                            Reply2 = coordinate2(SeqNum),
+                            broadcast(Rtable, {Reply2, self(), SeqNum}),
+                            case Reply2 of
+                                doAbort ->
+                                    ets:delete(TempTable),
+                                    lists:foreach(fun(C) -> 
+                                            exit(C, abort)
+                                        end, Children),
+                                    Rtable;
+                                doCommit ->
+                                    ets:delete(Rtable),
+                                    TempTable
+                            end
                     end
             end
     end.
 
 coordinate2(SeqNum) ->
     receive 
-        {doAbort, From, SeqNum} ->
+        {doAbort, _, SeqNum} ->
             doAbort;
-        {doCommit, From, SeqNum} ->
+        {doCommit, _, SeqNum} ->
             doCommit;
         _ -> coordinate2(SeqNum)
     end.
@@ -141,10 +147,7 @@ phase1Loop(SeqNum, Seqtable, NodeCount) ->
     receive
         {abort, _, SeqNum} -> 
             % consume msg, wait until timeout to abort
-            case NodeCount - 1 of
-                0 -> abort;
-                _ -> phase1Loop(SeqNum, Seqtable, NodeCount - 1)
-            end;
+            abort;
         {yes, _, SeqNum} -> 
             case NodeCount - 1 of
                 0 -> yes;

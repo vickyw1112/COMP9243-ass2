@@ -24,6 +24,7 @@
     ->
     Make a copy with routering table
     ->
+
     Apply the Controlfun onto that copy table 
     -> 
     Wait for the replys from other nodes for 5 seconds
@@ -70,3 +71,4 @@
     3. If ControlFun failed, will abort the changes
     4. If one node crashed in graphToNetwork, the program will return fail
     5. If one node crashed in the process of 2PC, it can not send or reply any messsage, the code will generate abort after timeout
+    6. If repeated SeqNum occurs, just return current table 
