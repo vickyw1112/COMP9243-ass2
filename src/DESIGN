@@ -1,0 +1,69 @@
+1. Provide an exact description of the algorithm and protocol (including the format of the various messages and their semantics) used to implement two-phase commit
+    
+    Controller send {control, From, Pid, SeqNum, ControlFun} message to root process
+    ->
+    1. First Phase(Voting phase)
+    =========Root Node=========
+    Add the SeqNum into a list for later use
+    -> 
+    Broadcast the control message to all the nodes it connects with
+    ->
+    Make a copy with routering table
+    ->
+    Apply the Controlfun onto that copy table 
+    -> 
+    Wait for the replys from other nodes for 5 seconds
+    ->
+    Root process will decide to abort if 5 seconds go or one of the reply is {abort, From, SeqNum}
+    ->
+    Otherwise root process will decide to commit
+    =========Common Node=========
+    Add the SeqNum into a list for later use
+    -> 
+    Broadcast the control message to all the nodes it connects with
+    ->
+    Make a copy with routering table
+    ->
+    Apply the Controlfun onto that copy table 
+    -> 
+    Wait for the replys from other nodes for 5 seconds
+    ->
+    Then the non-root process will send back a abort/yes message back to whom sends the control message
+    ->
+    After that non-root node will enter an uncertain state waiting for decision made by root node
+
+    2. Second Phase
+    Root process receives the replys back from other nodes, if all the messages are {yes, Pid, SeqNum}, 
+        the root process will broadcast {doCommit, self(), SeqNum} to all the other nodes, 
+        if the replys are {abort, From, SeqNum} then broadcast {doAbort, self(), SeqNum}
+    ->
+    If root node committed, all the nodes will choose to return current routering table or the copy one 
+
+2. Provide an exact description of any extra messages you've introduced
+    1. Phase1 - reply of control message
+    {yes, From, SeqNum}
+    {abort, From, SeqNum}
+        Phase 1 of 2Pc nodes will propagate to the root node whether they can commit or abort the changes of network
+
+    2. Phase2 - forward decision
+    {doCommit, From, SeqNum}
+    {doAbort, From, SeqNum}
+        Phase 2 of root node to forward its decision to all the other nodes whether they commit the change or abort
+
+3. Provide a description of how you implement the required functions (graphToNetwork and extendNetwork)
+    1. GraphToNetwork
+        1. Creating two ets table: one for router name and it pid, another one for recording the number of incoming edges of a router and spawn the processes.
+        2. Forming routering table from these two table we have
+        3. Send control message which SeqNum is 0 to all the processed we have spawned before
+        4. Then receive the commited/abort message back from the processes
+        5. Return Pid of first node
+
+    2. ExtendNetwork
+        1. Forming the routering table entry for new node
+        2. construct the ControlFun: spawn the new node then send the routering table of that node to the new process; For other nodes, 
+            updating the routering table if their have connection wih the new node or can get to the new node
+        3. send control messge to the network, waiting for the replys
+
+4. Describe how you handle fault cases and conflicting control requests
+    1. Concurrent requests are handles by aborting both requests. If two control requests are sent, the node who accept the different control message will find that the SeqNum it has is different with others, and it will generate abort message to abort the control it accepted, other nodes will be traped into the loop waiting for replys, after 5 seconds, they will also generate abort message 
+    2. Because of our network structure, if one node abort, the whole network will abort the changes
