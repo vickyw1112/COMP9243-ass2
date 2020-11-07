@@ -54,7 +54,7 @@
     1. GraphToNetwork
         1. Creating two ets table: one for router name and it pid, another one for recording the number of incoming edges of a router and spawn the processes.
         2. Forming routering table from these two table we have
-        3. Send control message which SeqNum is 0 to all the processed we have spawned before
+        3. Send control message which SeqNum is 0 to all the processes we have spawned before
         4. Then receive the commited/abort message back from the processes
         5. Return Pid of first node
 
