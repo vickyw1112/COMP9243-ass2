@@ -65,5 +65,6 @@
         3. send control messge to the network, waiting for the replys
 
 4. Describe how you handle fault cases and conflicting control requests
-    1. Concurrent requests are handles by aborting both requests. If two control requests are sent, the node who accept the different control message will find that the SeqNum it has is different with others, and it will generate abort message to abort the control it accepted, other nodes will be traped into the loop waiting for replys, after 5 seconds, they will also generate abort message 
+    1. Concurrent requests are handles by aborting both requests. If two control requests are sent, the node who accept the different control message will find that the SeqNum it has is different with others in 2PC Phase 1 by useing the SeqTable we created, and it will generate abort message to abort the control it accepted, other nodes will be traped into the loop waiting for replys, after 5 seconds, they will also generate abort message 
     2. Because of our network structure, if one node abort, the whole network will abort the changes
+    3. If ControlFun failed, will abort the changes

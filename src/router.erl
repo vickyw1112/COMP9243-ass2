@@ -17,9 +17,7 @@ loop(RouterName, Rtable, Seqtable) ->
                     Pid ! {trace, self(), lists:reverse(NewTrace)};
                 _ ->
                     Next = ets:lookup(Rtable, Dest),
-                    % TODO change here
                     case Next of
-                        [] -> io:format("something bad happend~n");
                         [{_, Nid}] -> 
                             Nid ! {message, Dest, self(), Pid, NewTrace}
                     end
